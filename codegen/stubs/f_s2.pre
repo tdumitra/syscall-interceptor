@@ -1,0 +1,5 @@
+/* Initilize the function pointers */
+void
+FunctionPointers::init_fptrs ()
+     throw()
+{

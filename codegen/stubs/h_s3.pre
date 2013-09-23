@@ -1,0 +1,7 @@
+class FunctionPointers {
+ public:
+  /* Initilize pointers to the default functions. */
+  static void init_fptrs() throw();
+  
+ public: 
+  /* Pointers to the default functions */

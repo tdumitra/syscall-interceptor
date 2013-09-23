@@ -1,0 +1,108 @@
+==========================================================================
+==			SYSTEM-CALL INTERCEPTOR				==
+==========================================================================
+
+This is an system-call interceptor that uses library interposition. It creates
+a shared library called libinterceptor.so.1. To intercept the system calls of a 
+program, run 
+
+	env LD_PRELOAD=libinterceptor.so.1 program
+
+(or whatever command your shell provides for running a program in a modified
+environment). 
+
+Most of the code for intercepting a system call can be generated automatically.
+Even after modifying the code of the interceptor, it is very easy to add a
+new system call using this code generation facility.
+
+
+FILES
+=====
+README  	This file.
+Makefile	The Makefile.
+interceptor.h   Main header file of the interceptor. 
+interceptorstate.cpp Defines a C++ class that initializes and encapsulates the
+		state of the interceptor.
+modified_fun.cpp  The definitions of the modified function calls. 
+function_pointers.cpp	Initializes the function pointers to the standard
+		system calls. Automatically generated.
+interc_defs.h	Declares wrapper functions that invoke the original system
+		calls. For instance, the original read() function is called
+		real_read(). This header also contains the inline 
+		implementations of these functions. Automatically generated.
+trace_logger.cpp  Program that reads the output of the interceptor from a named
+		pipe.
+tracec.h	Defines printf-like functions for communicating with 
+		trace_logger.
+tracec.cpp	Implementation of this API. These functions are useful for 
+		avoid cyclic invocations when outputing information and system
+		calls like read() and write() are intercepted. 
+codegen/	Contains the code generator.
+
+
+DESCRIPTION
+===========
+This code intercepts a bunch of system calls and prints their parameters to a 
+named pipe. You can collect these messages with the program trace_logger 
+(you need to start this program before anything that is intercepted). 
+
+There is a compilation directive in the Makefile, -DX_BUF, that controls the 
+output of the interceptor. When this is not defined, the buffer arguments of 
+read() and write() are printed as pointers (addresses); when it is defined, 
+the contents of the buffers are printed as strings. You can use this to 
+control the verbosity of the output.
+
+The directory codegen/ contains a script that generate code for the 
+interceptor. To intercept a new function, you must:
+- Add the definition and the header file required to fun_decls.hpp
+- Run ./generate_interceptor.pl
+- Run make to make sure it compiles
+- Correct the function declaration if needed (sometimes the declaration from 
+the man page does not match the declaration from the system header)
+- After you managed to compile it, you can copy function_pointers.cpp and 
+interc_defs.h to the parent directory, and copy the body of the intercepted 
+function from modified_fun.cpp into the file with the same name from the 
+parent directory.
+- Go back to the parent directory and recompile.
+
+
+KNOWN BUGS
+==========
+Multiple users cannot start trace_logger on the same host because the filename
+of the named pipe is hard-coded and this will create a conflict.
+
+The system call open() is not yet intercepted. Since this is a function with 
+a variable number of parameters (i.e. it has a ... in the argument list) and 
+since there is no reliable way to pass a variable argument list to a function 
+with a variable number of arguments (or even to find out how many arguments 
+were passed to the function), this function cannot be handled by the code 
+generator. The interceptor code for functions with a variable list of 
+arguments must be hand-written by checking all the special cases and invoking
+real_open() with the appropriate parameter list. In particular, the third 
+argument of open() is meaningful only if the O_CREAT flag is included in the 
+second argument. 
+
+The dlsym() function, used to initialize the pointers to the standard system
+calls, relies on a non-standard extension of C/C++. GCC 4.0 and later will 
+issue a warning for each intercepted system call:
+
+	function_pointers.cpp:55: warning: ISO C++ forbids casting between 
+	pointer-to-function and pointer-to-object
+
+The problem is that, on some architectures, pointers to functions and pointers
+to objects have different sizes (e.g., the difference between near and far 
+pointers from x86 real mode). void* is a pointer to an object, and, when 
+casting it to a function pointer, some bits may be lost. dlsym() relies on
+a non-standard extension of C for x86 Linux, where these pointers are 
+represented in the same way. For more info, see 
+http://www.trilithium.com/johan/2004/12/problem-with-dlsym/. The bottom 
+line is that the interceptor works for now, but it may not work in the 
+future, after a solution to this problem is standardized. The warning cannot
+be disabled. 
+
+The interceptor was tested on Linux (Red Hat and Centos), but it does not compile 
+on Mac OS X where the C++ function definitions in unistd.h do not include the
+throw() specifier.
+
+
+Tudor Dumitras, 2006-2007

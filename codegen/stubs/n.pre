@@ -1,0 +1,17 @@
+/* (c) Tudor Dumitras, 2006-2007 */
+
+#include "interceptor.h"
+#include "interc_defs.h"
+#include "tracec.h"
+
+/* 
+ * Define global state object.
+ * Constructor will initialize the interceptor before 
+ * any other code is executed.
+ */
+InterceptorState interceptorState;
+
+
+static int indent = 0;
+
+
